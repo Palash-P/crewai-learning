@@ -1,4 +1,4 @@
-from crewai import Agent, Task, Crew, LLM
+from crewai import Agent, Task, Crew, LLM, Process
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -55,9 +55,40 @@ analysis_task = Task(
     context=[research_task]
 )
 
+writer = Agent(
+    role="Technical Writer",
+    goal="Turn research and analysis into a clear, professional report",
+    backstory="You are an experienced technical writer who explains complex AI concepts simply.",
+    llm=llm
+)
+
+writing_task = Task(
+    description="""
+    Write a professional markdown report about AI agents.
+
+    Use the research and analysis provided to you.
+
+    The report should include:
+    1. Introduction
+    2. What AI agents are
+    3. AI agents vs normal LLM applications
+    4. Components of AI agents
+    5. Practical applications
+    6. Conclusion
+
+    Keep the explanation clear and beginner-friendly.
+    """,
+    expected_output="""
+    A polished markdown report about AI agents.
+    """,
+    agent=writer,
+    context=[research_task, analysis_task]
+)
+
 crew = Crew(
-    agents=[researcher],
-    tasks=[research_task]
+    agents=[researcher, analyst, writer],
+    tasks=[research_task, analysis_task, writing_task],
+    process=Process.sequential
 )
 
 result = crew.kickoff()
