@@ -1,4 +1,5 @@
 from crewai import Agent, LLM
+from crewai_tools import SerperDevTool
 from dotenv import load_dotenv
 from crewai import Task, Crew
 
@@ -7,6 +8,7 @@ load_dotenv()
 llm = LLM(
     model="gemini/gemini-2.5-flash"
 )
+search_tool = SerperDevTool()
 
 
 # ============================================================
@@ -21,6 +23,7 @@ technology_researcher = Agent(
         "a startup's technical products, AI capabilities, "
         "technology stack, and technical differentiation."
     ),
+    tools=[search_tool],
     llm=llm
 )
 
@@ -37,6 +40,7 @@ competitor_researcher = Agent(
         "identifies competitors and compares their products, "
         "features, positioning, and differentiation."
     ),
+    tools=[search_tool],
     llm=llm
 )
 
@@ -53,6 +57,22 @@ funding_researcher = Agent(
         "startup funding rounds, investors, funding amounts, "
         "and investment history."
     ),
+    tools=[search_tool],
+    llm=llm
+)
+
+# ============================================================
+# Synthesizer
+# ============================================================
+
+synthesizer = Agent(
+    role="Research Synthesizer",
+    goal="Combine research findings into one clear startup analysis",
+    backstory=(
+        "You are a senior business and technology analyst. "
+        "You combine findings from multiple researchers into "
+        "a coherent, accurate, and useful final report."
+    ),
     llm=llm
 )
 
@@ -62,22 +82,31 @@ funding_researcher = Agent(
 
 technology_task = Task(
     description="""
-    Research the technology and AI capabilities of OpenAI.
+    Research OpenAI's current technology and AI capabilities
+    using web search.
+
+    Search for reliable and recent information.
 
     Focus on:
-    - Major AI technologies and products
-    - AI models
+    - Current AI models and products
     - Developer technologies
+    - Current technical capabilities
+    - Major technical developments
     - Technical differentiation
 
-    Provide factual and concise findings.
+    Prefer official OpenAI sources and other highly reliable
+    sources.
+
+    Do not rely only on your existing knowledge.
     """,
     expected_output="""
-    A concise technology research report covering:
-    - Major technologies
-    - AI models/products
+    A concise technology research report containing:
+    - Current technologies and products
+    - AI models
     - Developer technologies
+    - Recent developments
     - Technical differentiation
+    - Sources used
     """,
     agent=technology_researcher,
     async_execution=True
@@ -140,6 +169,46 @@ funding_task = Task(
 )
 
 # ============================================================
+# Synthesis Task
+# ============================================================
+
+synthesis_task = Task(
+    description="""
+    Combine the findings from the technology, competitor,
+    and funding researchers into one final report about OpenAI.
+
+    Organize the report into:
+
+    1. Technology and AI capabilities
+    2. Major competitors
+    3. Funding and investors
+    4. Overall analysis
+
+    Do not invent information.
+    Use the research provided by the other tasks.
+    """,
+
+    expected_output="""
+    A clear and well-structured final report containing:
+
+    - Technology analysis
+    - Competitor analysis
+    - Funding analysis
+    - Overall conclusion
+    """,
+
+    agent=synthesizer,
+
+    # This task waits for the asynchronous research tasks
+    context=[
+        technology_task,
+        competitor_task,
+        funding_task
+    ]
+)
+
+
+# ============================================================
 # Parallel Crew
 # ============================================================
 
@@ -147,13 +216,15 @@ crew = Crew(
     agents=[
         technology_researcher,
         competitor_researcher,
-        funding_researcher
+        funding_researcher,
+        synthesizer
     ],
 
     tasks=[
         technology_task,
         competitor_task,
-        funding_task
+        funding_task,
+        synthesis_task
     ]
 )
 
