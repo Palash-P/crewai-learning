@@ -1,9 +1,17 @@
-from crewai.flow.flow import Flow, listen, start, router
+from crewai.flow.flow import Flow, listen, start
 from pydantic import BaseModel
 from crewai import Agent, Task, Crew, LLM
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+# ============================================================
+# Configuration
+# ============================================================
+
+MAX_RETRIES = 3
+QUALITY_THRESHOLD = 80
 
 
 # ============================================================
@@ -13,6 +21,16 @@ load_dotenv()
 class EvaluationResult(BaseModel):
     score: int
     reason: str
+
+
+# ============================================================
+# Flow State
+# ============================================================
+
+class ResearchState(BaseModel):
+    research: str = ""
+    retry_count: int = 0
+    evaluation: EvaluationResult | None = None
 
 
 # ============================================================
@@ -44,18 +62,9 @@ researcher = Agent(
 # ============================================================
 
 research_task = Task(
-    description="""
-    Explain what AI agents are.
-
-    Cover:
-    - What an AI agent is
-    - How agents differ from normal LLM applications
-    - Common components of an AI agent
-    """,
+    description="",
     expected_output="""
-    A clear and detailed explanation of AI agents,
-    including their definition, differences from normal
-    LLM applications, and common components.
+    A clear and detailed explanation of AI agents.
     """,
     agent=researcher
 )
@@ -79,7 +88,7 @@ evaluator = Agent(
     role="Research Quality Evaluator",
     goal=(
         "Evaluate whether research is accurate, relevant, "
-        "complete, and sufficiently detailed"
+        "complete, and sufficiently detailed."
     ),
     backstory=(
         "You are a strict research reviewer. "
@@ -95,45 +104,16 @@ evaluator = Agent(
 # ============================================================
 
 evaluation_task = Task(
-    description="""
-    Evaluate the following research:
-
-    {research}
-
-    Determine whether the research is:
-
-    1. Accurate
-    2. Relevant
-    3. Sufficiently detailed
-    4. Clearly written
-
-    Give an overall quality score from 0 to 100.
-
-    Provide a brief explanation for the score.
-    """,
-
+    description="",
     expected_output="""
-    A structured evaluation containing:
+    Return a structured evaluation containing:
 
     - score: integer from 0 to 100
     - reason: brief explanation of the score
     """,
-
     agent=evaluator,
-
-    # Force the evaluator to return our Pydantic structure
     output_pydantic=EvaluationResult
 )
-
-
-# ============================================================
-# Flow State
-# ============================================================
-
-class ResearchState(BaseModel):
-    research: str = ""
-    retry_count: int = 0
-    evaluation: EvaluationResult | None = None
 
 
 # ============================================================
@@ -143,134 +123,148 @@ class ResearchState(BaseModel):
 class ResearchFlow(Flow[ResearchState]):
 
     # --------------------------------------------------------
-    # Step 1: Run Research
+    # Research + Retry Loop
     # --------------------------------------------------------
 
     @start()
     def run_research(self):
 
-        for attempt in range(1, 4):
+        for attempt in range(1, MAX_RETRIES + 1):
 
             self.state.retry_count = attempt
 
-            print(f"\n🔎 Research attempt {attempt}/3\n")
+            print(
+                f"\n🔎 Research attempt "
+                f"{attempt}/{MAX_RETRIES}"
+            )
+
+            # First attempt is intentionally weak.
+            if attempt == 1:
+
+                research_task.description = """
+                Give a VERY short explanation of AI agents.
+
+                Only provide 2-3 sentences.
+                Do not explain the components in detail.
+                """
+
+            else:
+
+                research_task.description = f"""
+                Improve the previous research using the
+                evaluator's feedback.
+
+                Previous research:
+                {self.state.research}
+
+                Evaluator score:
+                {self.state.evaluation.score}
+
+                Evaluator feedback:
+                {self.state.evaluation.reason}
+
+                Now provide a much better explanation of AI agents.
+
+                Cover:
+                - What an AI agent is
+                - How agents differ from normal LLM applications
+                - Common components of an AI agent
+                """
+
+            # ------------------------------------------------
+            # Run Research
+            # ------------------------------------------------
 
             research_result = research_crew.kickoff()
 
             self.state.research = str(research_result)
 
-            print("Research stored in Flow state.")
+            print("Research completed.")
 
-            # Temporary basic quality check
-            if len(self.state.research) >= 500:
 
-                print("\n✅ Research is sufficiently detailed!")
+            # ------------------------------------------------
+            # Evaluate Research
+            # ------------------------------------------------
+
+            print("\n🧐 Evaluating research...")
+
+            evaluation_task.description = f"""
+            Evaluate the following research:
+
+            --- RESEARCH ---
+            {self.state.research}
+            --- END RESEARCH ---
+
+            Determine whether the research is:
+
+            1. Accurate
+            2. Relevant
+            3. Sufficiently detailed
+            4. Clearly written
+
+            Give an overall quality score from 0 to 100.
+
+            Explain why you gave that score.
+            """
+
+            evaluation_result = Crew(
+                agents=[evaluator],
+                tasks=[evaluation_task]
+            ).kickoff()
+
+            self.state.evaluation = evaluation_result.pydantic
+
+            print("\n===== EVALUATION =====")
+            print(
+                f"Score : {self.state.evaluation.score}"
+            )
+            print(
+                f"Reason: {self.state.evaluation.reason}"
+            )
+
+
+            # ------------------------------------------------
+            # Decision
+            # ------------------------------------------------
+
+            if self.state.evaluation.score >= QUALITY_THRESHOLD:
+
+                print("\n✅ Research approved!")
 
                 return self.state.research
 
-            print("\n❌ Research is too short.")
 
-        print("\n🛑 Maximum research attempts reached.")
+            # ------------------------------------------------
+            # Retry
+            # ------------------------------------------------
 
-        return self.state.research
+            if attempt < MAX_RETRIES:
 
+                print(
+                    "\n🔄 Research quality is too low."
+                )
 
-    # --------------------------------------------------------
-    # Step 2: Evaluate Research
-    # --------------------------------------------------------
+                print(
+                    f"Retrying... "
+                    f"{attempt + 1}/{MAX_RETRIES}"
+                )
 
-    @listen(run_research)
-    def evaluate_research(self):
-
-        print("\n🧐 Evaluating research...\n")
-
-        # Pass the current research to the evaluator
-        evaluation_task.description = f"""
-        Evaluate the following research:
-
-        {self.state.research}
-
-        Determine whether the research is:
-
-        1. Accurate
-        2. Relevant
-        3. Sufficiently detailed
-        4. Clearly written
-
-        Give an overall quality score from 0 to 100.
-
-        Provide a brief explanation for the score.
-        """
-
-        result = Crew(
-            agents=[evaluator],
-            tasks=[evaluation_task]
-        ).kickoff()
-
-        # Get structured Pydantic output
-        self.state.evaluation = result.pydantic
-
-        print("Evaluation stored in Flow state.")
-
-        print("\n===== EVALUATION =====")
-        print(f"Score : {self.state.evaluation.score}")
-        print(f"Reason: {self.state.evaluation.reason}")
-
-        return self.state.evaluation
+                continue
 
 
-    # --------------------------------------------------------
-    # Step 3: Decide What To Do
-    # --------------------------------------------------------
+            # ------------------------------------------------
+            # Maximum Attempts Reached
+            # ------------------------------------------------
 
-    @router(evaluate_research)
-    def check_evaluation(self):
+            print(
+                "\n🛑 Maximum retries reached."
+            )
 
-        print("\n🚦 Checking evaluation...\n")
-
-        if self.state.evaluation.score >= 80:
-
-            print("✅ Evaluation passed.")
-
-            return "good"
-
-        print("❌ Evaluation failed.")
-
-        return "bad"
-
-
-    # --------------------------------------------------------
-    # Step 4: Good Research Path
-    # --------------------------------------------------------
-
-    @listen("good")
-    def good_research(self):
-
-        print("\n🎉 Research approved!")
-
-        return (
-            f"Research approved with score "
-            f"{self.state.evaluation.score}/100."
-        )
-
-
-    # --------------------------------------------------------
-    # Step 5: Bad Research Path
-    # --------------------------------------------------------
-
-    @listen("bad")
-    def bad_research(self):
-
-        print("\n⚠️ Research needs improvement.")
-
-        return (
-            f"Research rejected with score "
-            f"{self.state.evaluation.score}/100."
-        )
+            return self.state.research
 
 
 # ============================================================
-# Start Flow
+# Run Flow
 # ============================================================
 
 flow = ResearchFlow()
