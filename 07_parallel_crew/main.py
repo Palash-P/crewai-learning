@@ -1,14 +1,30 @@
-from crewai import Agent, LLM
+from crewai import Agent, Task, Crew, LLM
 from crewai_tools import SerperDevTool
 from dotenv import load_dotenv
-from crewai import Task, Crew
+from pydantic import BaseModel
+
+
+# ============================================================
+# Configuration
+# ============================================================
 
 load_dotenv()
 
 llm = LLM(
-    model="gemini/gemini-2.5-flash"
+    model="openai/gpt-5.6-luna"
 )
+
 search_tool = SerperDevTool()
+
+
+# ============================================================
+# Structured Output Schema
+# ============================================================
+
+class ResearchResult(BaseModel):
+    summary: str
+    key_findings: list[str]
+    sources: list[str]
 
 
 # ============================================================
@@ -17,11 +33,11 @@ search_tool = SerperDevTool()
 
 technology_researcher = Agent(
     role="Technology Researcher",
-    goal="Research the technology and AI capabilities of a startup",
+    goal="Research the current technology and AI capabilities of a startup",
     backstory=(
         "You are a technology analyst who investigates "
-        "a startup's technical products, AI capabilities, "
-        "technology stack, and technical differentiation."
+        "AI models, developer platforms, products, technical "
+        "capabilities, and recent technological developments."
     ),
     tools=[search_tool],
     llm=llm
@@ -34,11 +50,11 @@ technology_researcher = Agent(
 
 competitor_researcher = Agent(
     role="Competitor Researcher",
-    goal="Identify and analyze the startup's main competitors",
+    goal="Identify and analyze the major current competitors of a startup",
     backstory=(
-        "You are a competitive intelligence analyst who "
-        "identifies competitors and compares their products, "
-        "features, positioning, and differentiation."
+        "You are a competitive intelligence analyst who researches "
+        "competitors, their products, strengths, weaknesses, "
+        "and strategic positioning."
     ),
     tools=[search_tool],
     llm=llm
@@ -51,15 +67,127 @@ competitor_researcher = Agent(
 
 funding_researcher = Agent(
     role="Funding Researcher",
-    goal="Research the startup's funding and investors",
+    goal="Research the current funding history and investors of a startup",
     backstory=(
-        "You are a financial research analyst who investigates "
-        "startup funding rounds, investors, funding amounts, "
-        "and investment history."
+        "You are a financial research analyst specializing in "
+        "startup funding, investment rounds, investors, valuations, "
+        "and strategic financial relationships."
     ),
     tools=[search_tool],
     llm=llm
 )
+
+
+# ============================================================
+# Research Tasks
+# ============================================================
+
+technology_task = Task(
+    description="""
+    Research OpenAI's current technology and AI capabilities.
+
+    IMPORTANT:
+    - Use the web search tool to gather current information.
+    - Do not rely only on your existing knowledge.
+    - Prefer official OpenAI sources and other reliable sources.
+    - Focus on recent and currently relevant information.
+    - Do not invent information.
+
+    Research:
+    1. Current AI models and major products
+    2. Developer APIs and platforms
+    3. Important technical capabilities
+    4. Recent technology developments
+    5. Technical differentiation
+
+    For every major finding, provide the source URL.
+    """,
+    expected_output="""
+    A structured research result containing:
+    - summary
+    - key_findings
+    - sources
+    """,
+    agent=technology_researcher,
+    async_execution=True,
+    output_pydantic=ResearchResult
+)
+
+
+competitor_task = Task(
+    description="""
+    Research OpenAI's current major competitors.
+
+    IMPORTANT:
+    - Use the web search tool.
+    - Find current information rather than relying only on existing knowledge.
+    - Prefer recent and reliable sources.
+    - Do not invent information.
+
+    Identify and analyze major competitors such as:
+    - Anthropic
+    - Google
+    - Meta
+    - xAI
+    - Microsoft
+    - Amazon
+    - DeepSeek
+    - Mistral
+
+    For each relevant competitor, research:
+    1. Major AI products/models
+    2. Main competitive advantage
+    3. How they compare with OpenAI
+    4. Important recent developments
+
+    Provide source URLs for major findings.
+    """,
+    expected_output="""
+    A structured research result containing:
+    - summary
+    - key_findings
+    - sources
+    """,
+    agent=competitor_researcher,
+    async_execution=True,
+    output_pydantic=ResearchResult
+)
+
+
+funding_task = Task(
+    description="""
+    Research OpenAI's current funding and investors.
+
+    IMPORTANT:
+    - Use the web search tool to find current information.
+    - Do not rely only on your existing knowledge.
+    - Prefer official announcements and reliable financial/news sources.
+    - Be especially careful with dates, funding amounts,
+      investors, and valuations.
+    - Distinguish confirmed information from reported estimates.
+    - Do not invent information.
+
+    Research:
+    1. Major funding rounds
+    2. Funding amounts
+    3. Important investors
+    4. Recent financing
+    5. Current valuation information when reliably available
+    6. Major strategic investment relationships
+
+    Provide source URLs for major findings.
+    """,
+    expected_output="""
+    A structured research result containing:
+    - summary
+    - key_findings
+    - sources
+    """,
+    agent=funding_researcher,
+    async_execution=True,
+    output_pydantic=ResearchResult
+)
+
 
 # ============================================================
 # Synthesizer
@@ -67,106 +195,17 @@ funding_researcher = Agent(
 
 synthesizer = Agent(
     role="Research Synthesizer",
-    goal="Combine research findings into one clear startup analysis",
+    goal="Combine specialist research into an accurate evidence-based startup analysis",
     backstory=(
         "You are a senior business and technology analyst. "
-        "You combine findings from multiple researchers into "
-        "a coherent, accurate, and useful final report."
+        "You combine research from multiple specialists into "
+        "a clear, accurate, evidence-based final report. "
+        "You never invent facts and clearly identify uncertainty "
+        "or disagreement between sources."
     ),
     llm=llm
 )
 
-# ============================================================
-# Technology Research Task
-# ============================================================
-
-technology_task = Task(
-    description="""
-    Research OpenAI's current technology and AI capabilities
-    using web search.
-
-    Search for reliable and recent information.
-
-    Focus on:
-    - Current AI models and products
-    - Developer technologies
-    - Current technical capabilities
-    - Major technical developments
-    - Technical differentiation
-
-    Prefer official OpenAI sources and other highly reliable
-    sources.
-
-    Do not rely only on your existing knowledge.
-    """,
-    expected_output="""
-    A concise technology research report containing:
-    - Current technologies and products
-    - AI models
-    - Developer technologies
-    - Recent developments
-    - Technical differentiation
-    - Sources used
-    """,
-    agent=technology_researcher,
-    async_execution=True
-)
-
-
-# ============================================================
-# Competitor Research Task
-# ============================================================
-
-competitor_task = Task(
-    description="""
-    Research the major competitors of OpenAI.
-
-    Focus on:
-    - Major competitors
-    - Their major AI products
-    - How they compete with OpenAI
-    - Important differences in positioning
-
-    Provide factual and concise findings.
-    """,
-    expected_output="""
-    A concise competitor analysis containing:
-    - Major competitors
-    - Their relevant products
-    - Competitive differences
-    - Market positioning
-    """,
-    agent=competitor_researcher,
-    async_execution=True
-)
-
-
-# ============================================================
-# Funding Research Task
-# ============================================================
-
-funding_task = Task(
-    description="""
-    Research OpenAI's funding and investors.
-
-    Focus on:
-    - Major funding rounds
-    - Major investors
-    - Important funding events
-    - Approximate funding amounts where available
-
-    Provide factual and concise findings.
-    """,
-    expected_output="""
-    A concise funding report containing:
-    - Major funding rounds
-    - Important investors
-    - Funding amounts where available
-    - Important funding events
-    """,
-    agent=funding_researcher,
-    async_execution=True
-)
 
 # ============================================================
 # Synthesis Task
@@ -174,32 +213,44 @@ funding_task = Task(
 
 synthesis_task = Task(
     description="""
-    Combine the findings from the technology, competitor,
-    and funding researchers into one final report about OpenAI.
+    Create a comprehensive analysis of OpenAI using ONLY the
+    research provided by the Technology, Competitor, and Funding
+    research tasks.
 
-    Organize the report into:
+    IMPORTANT RULES:
+
+    1. Do NOT rely on your own existing knowledge for factual claims.
+    2. Do NOT invent facts, numbers, dates, models, investors,
+       products, or events.
+    3. Preserve important source URLs from the research.
+    4. If research contains conflicting information, explicitly
+       mention the conflict instead of choosing an unsupported value.
+    5. Clearly distinguish confirmed information from reported
+       estimates or uncertain information.
+    6. Do not present unsupported claims as facts.
+
+    Organize the final report into:
+
+    ## 1. Technology and AI Capabilities
+    ## 2. Major Competitors
+    ## 3. Funding and Investors
+    ## 4. Overall Analysis
+
+    Include a Sources section under each major section where
+    appropriate.
+    """,
+    expected_output="""
+    A clear, evidence-based report containing:
 
     1. Technology and AI capabilities
     2. Major competitors
     3. Funding and investors
-    4. Overall analysis
+    4. Overall strategic analysis
 
-    Do not invent information.
-    Use the research provided by the other tasks.
+    Preserve relevant source URLs and clearly identify
+    uncertainty or conflicting information.
     """,
-
-    expected_output="""
-    A clear and well-structured final report containing:
-
-    - Technology analysis
-    - Competitor analysis
-    - Funding analysis
-    - Overall conclusion
-    """,
-
     agent=synthesizer,
-
-    # This task waits for the asynchronous research tasks
     context=[
         technology_task,
         competitor_task,
@@ -209,7 +260,7 @@ synthesis_task = Task(
 
 
 # ============================================================
-# Parallel Crew
+# Crew
 # ============================================================
 
 crew = Crew(
@@ -219,7 +270,6 @@ crew = Crew(
         funding_researcher,
         synthesizer
     ],
-
     tasks=[
         technology_task,
         competitor_task,
@@ -228,7 +278,13 @@ crew = Crew(
     ]
 )
 
+
+# ============================================================
+# Execute
+# ============================================================
+
 result = crew.kickoff()
+
 
 print("\n================================")
 print("       FINAL RESULT")
