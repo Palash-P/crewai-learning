@@ -4,22 +4,19 @@ from crewai.knowledge.source.text_file_knowledge_source import (
 )
 from dotenv import load_dotenv
 
-
 load_dotenv()
 
-
-# ============================================================
+# -----------------------------
 # LLM
-# ============================================================
+# -----------------------------
 
 llm = LLM(
     model="openai/gpt-5.6-luna"
 )
 
-
-# ============================================================
-# Knowledge Sources
-# ============================================================
+# -----------------------------
+# Knowledge Base
+# -----------------------------
 
 company_knowledge = TextFileKnowledgeSource(
     file_paths=[
@@ -29,66 +26,81 @@ company_knowledge = TextFileKnowledgeSource(
     ]
 )
 
-
-# ============================================================
+# -----------------------------
 # Agent
-# ============================================================
+# -----------------------------
 
 assistant = Agent(
     role="Company Knowledge Assistant",
     goal=(
-        "Answer questions accurately using the company's "
-        "provided knowledge"
+        "Answer questions accurately using company knowledge "
+        "and remember useful information from the conversation"
     ),
     backstory=(
         "You are an internal company assistant. "
-        "You answer questions using the company's knowledge base. "
-        "If the information is not available, clearly say "
-        "that it is not available."
+        "Use the company knowledge base for company facts "
+        "and use conversation memory when the user provides "
+        "personal context or information."
     ),
     llm=llm,
     verbose=True
 )
 
+# -----------------------------
+# Conversation
+# -----------------------------
 
-# ============================================================
-# Task
-# ============================================================
+questions = [
+    "Remember that our company has 20 employees.",
+    "What is NovaFlow?",
+    "Would NovaFlow be suitable for our company?"
+]
 
-task = Task(
-    description="""
-    Answer the following question using the available company knowledge:
+# -----------------------------
+# Tasks
+# -----------------------------
 
-    What is NovaFlow and what capabilities does it provide?
+tasks = []
 
-    Do not invent information.
-    Use only information available in the company knowledge.
-    """,
-    expected_output="""
-    A concise answer explaining:
-    - What NovaFlow is
-    - Its main capabilities
-    - The technologies/integrations it supports
-    """,
-    agent=assistant
-)
+for question in questions:
 
+    task = Task(
+        description=f"""
+        Respond to the following user message:
 
-# ============================================================
+        {question}
+
+        Rules:
+        - Use company knowledge when the question requires company facts.
+        - Use previous conversation context when relevant.
+        - Remember useful information provided by the user.
+        - Do not invent information.
+        - If information is unavailable, clearly say so.
+        """,
+        expected_output="""
+        A concise and accurate response that uses
+        relevant knowledge and conversation context.
+        """,
+        agent=assistant
+    )
+
+    tasks.append(task)
+
+# -----------------------------
 # Crew
-# ============================================================
+# -----------------------------
 
 crew = Crew(
     agents=[assistant],
-    tasks=[task],
-    verbose=True,
-    knowledge_sources=[company_knowledge]
+    tasks=tasks,
+    knowledge_sources=[company_knowledge],
+    memory=True,
+    verbose=True
 )
 
-
-# ============================================================
-# Run
-# ============================================================
+# -----------------------------
+# Execute
+# -----------------------------
 
 result = crew.kickoff()
 
