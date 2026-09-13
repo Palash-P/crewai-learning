@@ -1,0 +1,17 @@
+Product: NovaFlow
+
+NovaFlow is an AI-powered workflow automation platform.
+
+Key capabilities include:
+- Workflow automation
+- AI-powered document processing
+- Email classification
+- Data extraction
+- API integrations
+- Scheduled workflows
+
+NovaFlow supports Python, REST APIs, webhooks, and third-party
+integrations.
+
+The platform is primarily designed for small and medium-sized
+businesses.

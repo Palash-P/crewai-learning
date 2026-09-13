@@ -1,0 +1,15 @@
+Company Policies
+
+Refund Policy:
+Customers can request a refund within 14 days of purchase.
+
+Support:
+Standard customer support is available Monday through Friday.
+
+Data Retention:
+Customer workflow data is retained for 90 days after account
+termination unless a different contractual agreement applies.
+
+Security:
+Production customer data must be encrypted both in transit and
+at rest.

@@ -1,0 +1,12 @@
+Company: NovaTech AI
+
+NovaTech AI is a fictional software company that builds AI-powered
+automation tools for small and medium-sized businesses.
+
+The company was founded in 2022.
+
+Its main product is NovaFlow, an AI automation platform that allows
+businesses to automate repetitive workflows.
+
+NovaTech AI has engineering, product, sales, marketing, and customer
+success teams.
